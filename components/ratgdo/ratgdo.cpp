@@ -268,7 +268,7 @@ namespace ratgdo {
             this->cancel_position_sync_callbacks();
             cancel_timeout("door_query_state");
         } else if (door_state == DoorState::OPEN) {
-            this->door_position = 1.0;
+            this->door_position_update();
             this->cancel_position_sync_callbacks();
         } else if (door_state == DoorState::CLOSED) {
             this->door_position = 0.0;
@@ -736,6 +736,8 @@ namespace ratgdo {
         this->door_action(delta > 0 ? DoorAction::OPEN : DoorAction::CLOSE);
         set_timeout("move_to_position", operation_time, [this] {
             this->door_action(DoorAction::STOP);
+            this->received(DoorState::OPEN);
+            this->cancel_position_sync_callbacks();
         });
     }
 
