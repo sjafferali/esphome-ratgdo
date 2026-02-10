@@ -619,6 +619,17 @@ namespace ratgdo {
             return; // gets ignored by opener
         }
 
+#ifdef PROTOCOL_DRYCONTACT
+        cancel_timeout("reverse_direction");
+        if (*this->door_state == DoorState::CLOSING) {
+            this->door_action(DoorAction::STOP);
+            set_timeout("reverse_direction", 1000, [this] {
+                this->door_open();
+            });
+            return;
+        }
+#endif
+
         this->door_action(DoorAction::OPEN);
 
         if (*this->opening_duration > 0) {
@@ -638,6 +649,16 @@ namespace ratgdo {
             return; // gets ignored by opener
         }
 
+#ifdef PROTOCOL_DRYCONTACT
+        cancel_timeout("reverse_direction");
+        if (*this->door_state == DoorState::OPENING) {
+            this->door_action(DoorAction::STOP);
+            set_timeout("reverse_direction", 1000, [this] {
+                this->door_close();
+            });
+            return;
+        }
+#else
         if (*this->door_state == DoorState::OPENING) {
             // have to stop door first, otherwise close command is ignored
             this->door_action(DoorAction::STOP);
@@ -650,6 +671,7 @@ namespace ratgdo {
             });
             return;
         }
+#endif
 
         if (this->flags_.obstruction_sensor_detected) {
             this->door_action(DoorAction::CLOSE);
