@@ -15,6 +15,8 @@
 #include "common.h"
 #include "ratgdo_state.h"
 
+#include <cmath>
+
 #ifdef PROTOCOL_DRYCONTACT
 #include "dry_contact.h"
 #endif
@@ -209,8 +211,8 @@ namespace ratgdo {
                 this->start_opening = millis();
             }
             if (door_state == DoorState::OPEN && prev_door_state == DoorState::OPENING && this->start_opening > 0) {
-                auto duration = (millis() - this->start_opening) / 1000;
-                this->set_opening_duration(round(duration * 10) / 10);
+                auto duration = std::ceil((millis() - this->start_opening) / 1000.0f);
+                this->set_opening_duration(duration);
             }
             if (door_state == DoorState::STOPPED) {
                 this->start_opening = -1;
@@ -222,8 +224,8 @@ namespace ratgdo {
                 this->start_closing = millis();
             }
             if (door_state == DoorState::CLOSED && prev_door_state == DoorState::CLOSING && this->start_closing > 0) {
-                auto duration = (millis() - this->start_closing) / 1000;
-                this->set_closing_duration(round(duration * 10) / 10);
+                auto duration = std::ceil((millis() - this->start_closing) / 1000.0f);
+                this->set_closing_duration(duration);
             }
             if (door_state == DoorState::STOPPED) {
                 this->start_closing = -1;
@@ -244,6 +246,12 @@ namespace ratgdo {
             }
             if (*this->opening_duration != 0) {
                 this->schedule_door_position_sync();
+                set_timeout("door_query_state", (*this->opening_duration + 2) * 1000, [this]() {
+                    if (*this->door_state != DoorState::OPEN && *this->door_state != DoorState::STOPPED) {
+                        this->received(DoorState::OPEN);
+                        this->query_status();
+                    }
+                });
             }
         } else if (door_state == DoorState::CLOSING) {
             // door started closing
@@ -259,6 +267,12 @@ namespace ratgdo {
             }
             if (*this->closing_duration != 0) {
                 this->schedule_door_position_sync();
+                set_timeout("door_query_state", (*this->closing_duration + 2) * 1000, [this]() {
+                    if (*this->door_state != DoorState::CLOSED && *this->door_state != DoorState::STOPPED) {
+                        this->received(DoorState::CLOSED);
+                        this->query_status();
+                    }
+                });
             }
         } else if (door_state == DoorState::STOPPED) {
             this->door_position_update();
@@ -270,9 +284,11 @@ namespace ratgdo {
         } else if (door_state == DoorState::OPEN) {
             this->door_position = 1.0;
             this->cancel_position_sync_callbacks();
+            cancel_timeout("door_query_state");
         } else if (door_state == DoorState::CLOSED) {
             this->door_position = 0.0;
             this->cancel_position_sync_callbacks();
+            cancel_timeout("door_query_state");
         }
 
         if (door_state == DoorState::OPEN || door_state == DoorState::CLOSED || door_state == DoorState::STOPPED) {
@@ -411,11 +427,12 @@ namespace ratgdo {
         if (duration == 0) {
             return;
         }
-        this->position_sync_remaining_ = std::max(static_cast<uint16_t>(1000 * duration / update_period), static_cast<uint16_t>(1));
+        this->position_sync_remaining_ = std::max(static_cast<uint16_t>(std::ceil(1000.0f * duration / update_period)), static_cast<uint16_t>(1));
         set_interval(INTERVAL_POSITION_SYNC, static_cast<uint32_t>(update_period), [this]() {
             this->door_position_update();
             if (--this->position_sync_remaining_ == 0) {
                 cancel_interval(INTERVAL_POSITION_SYNC);
+                this->query_status();
             }
         });
     }
@@ -613,16 +630,6 @@ namespace ratgdo {
         }
 
         this->door_action(DoorAction::OPEN);
-
-        if (*this->opening_duration > 0) {
-            // query state in case we don't get a status message
-            set_timeout("door_query_state", (*this->opening_duration + 2) * 1000, [this]() {
-                if (*this->door_state != DoorState::OPEN && *this->door_state != DoorState::STOPPED) {
-                    this->received(DoorState::OPEN); // probably missed a status mesage, assume it's open
-                    this->query_status(); // query in case we're wrong and it's stopped
-                }
-            });
-        }
     }
 
     void RATGDOComponent::door_close()
@@ -651,15 +658,6 @@ namespace ratgdo {
             this->door_action(DoorAction::TOGGLE);
         }
 
-        if (*this->closing_duration > 0) {
-            // query state in case we don't get a status message
-            set_timeout("door_query_state", (*this->closing_duration + 2) * 1000, [this]() {
-                if (*this->door_state != DoorState::CLOSED && *this->door_state != DoorState::STOPPED) {
-                    this->received(DoorState::CLOSED); // probably missed a status mesage, assume it's closed
-                    this->query_status(); // query in case we're wrong and it's stopped
-                }
-            });
-        }
     }
 
     void RATGDOComponent::door_stop()
