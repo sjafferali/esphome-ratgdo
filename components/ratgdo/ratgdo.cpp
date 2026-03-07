@@ -15,6 +15,8 @@
 #include "common.h"
 #include "ratgdo_state.h"
 
+#include <cmath>
+
 #ifdef PROTOCOL_DRYCONTACT
 #include "dry_contact.h"
 #endif
@@ -209,8 +211,8 @@ namespace ratgdo {
                 this->start_opening = millis();
             }
             if (door_state == DoorState::OPEN && prev_door_state == DoorState::OPENING && this->start_opening > 0) {
-                auto duration = (millis() - this->start_opening) / 1000;
-                this->set_opening_duration(round(duration * 10) / 10);
+                auto duration = std::ceil((millis() - this->start_opening) / 1000.0f);
+                this->set_opening_duration(duration);
             }
             if (door_state == DoorState::STOPPED) {
                 this->start_opening = -1;
@@ -222,8 +224,8 @@ namespace ratgdo {
                 this->start_closing = millis();
             }
             if (door_state == DoorState::CLOSED && prev_door_state == DoorState::CLOSING && this->start_closing > 0) {
-                auto duration = (millis() - this->start_closing) / 1000;
-                this->set_closing_duration(round(duration * 10) / 10);
+                auto duration = std::ceil((millis() - this->start_closing) / 1000.0f);
+                this->set_closing_duration(duration);
             }
             if (door_state == DoorState::STOPPED) {
                 this->start_closing = -1;
@@ -411,11 +413,12 @@ namespace ratgdo {
         if (duration == 0) {
             return;
         }
-        this->position_sync_remaining_ = std::max(static_cast<uint16_t>(1000 * duration / update_period), static_cast<uint16_t>(1));
+        this->position_sync_remaining_ = std::max(static_cast<uint16_t>(std::ceil(1000.0f * duration / update_period)), static_cast<uint16_t>(1));
         set_interval(INTERVAL_POSITION_SYNC, static_cast<uint32_t>(update_period), [this]() {
             this->door_position_update();
             if (--this->position_sync_remaining_ == 0) {
                 cancel_interval(INTERVAL_POSITION_SYNC);
+                this->query_status();
             }
         });
     }
