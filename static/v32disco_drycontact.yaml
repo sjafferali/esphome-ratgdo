@@ -128,8 +128,8 @@ sensor:
     unit_of_measurement: "mm"
     internal: true
     filters:
-      - throttle: 1ms
-      - heartbeat: 1ms
+      - throttle: 1s
+      - heartbeat: 1s
   - platform: copy
     source_id: ${id_prefix}_vehicle_distance_actual
     name: Vehicle distance actual filtered
